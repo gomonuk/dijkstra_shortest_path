@@ -2,32 +2,36 @@ import json
 from aiohttp import web
 from aiofile import AIOFile
 
+
 def find_path(vertex, edges):
     for edge in edges:
         for v in edge:
             vertex[v]["neighbors"].update(set(edge))
 
-    min_vertex = "v1"
-    ber = list(vertex.keys())
+    vertex_with_min_score = "v1"
+    need_visit = list(vertex.keys())
 
     for _ in vertex:
-        vertex_data = vertex[min_vertex]
-        vertex_data["neighbors"].remove(min_vertex)
+        vertex_data = vertex[vertex_with_min_score]
+        vertex_data["neighbors"].remove(vertex_with_min_score)
         for neighbor in vertex_data["neighbors"]:
-            p = edges.get((min_vertex, neighbor)) or edges.get((neighbor, min_vertex))  # не проверяется направленность
-            a = vertex[min_vertex]["score"] + p
+            # При выборе не проверяется направленность ребра.
+            score = edges.get((vertex_with_min_score, neighbor)) or edges.get((neighbor, vertex_with_min_score))
 
-            if a < vertex[neighbor]["score"]:
-                vertex[neighbor]["path"] = vertex[min_vertex]["path"] + "->" + neighbor
-                vertex[neighbor]["score"] = vertex[min_vertex]["score"] + p
+            # Находим минимальный маршрут до вершины neighbor.
+            if (vertex[vertex_with_min_score]["score"] + score) < vertex[neighbor]["score"]:
+                vertex[neighbor]["path"] = vertex[vertex_with_min_score]["path"] + "->" + neighbor
+                vertex[neighbor]["score"] = vertex[vertex_with_min_score]["score"] + score
 
-        ber.remove(min_vertex)
+        need_visit.remove(vertex_with_min_score)
 
-        mn = float("inf")
-        for v in ber:
-            if vertex[v]["score"] < mn:
-                min_vertex = v
-                mn = vertex[v]["score"]
+        # Определяем новую вершину с минимальным весом.
+        minimum_score = float("inf")
+        for v in need_visit:
+            if vertex[v]["score"] < minimum_score:
+                minimum_score = vertex[v]["score"]
+                vertex_with_min_score = v
+
     return vertex
 
 
@@ -35,13 +39,14 @@ def to_cytoscape(vertex, edges):
     answer = []
 
     for k, v in vertex.items():
-        answer.append({"group": "nodes",
-                       "classes": "l1",
-                       "data": {"id": k,
-                                "score": v["score"],
-                                "path": v["path"],
-                                }
-                       })
+        answer.append({
+            "group": "nodes",
+            "classes": "l1",
+            "data": {"id": k,
+                     "score": v["score"],
+                     "path": v["path"],
+                     }
+        })
 
     for k, v in edges.items():
         answer.append({
@@ -52,7 +57,7 @@ def to_cytoscape(vertex, edges):
                 "label": v,
                 "width": v
             }
-        }, )
+        })
 
     return answer
 
@@ -94,19 +99,21 @@ async def get_json(request):
 
     vertex = find_path(vertex, edges)
     answer = to_cytoscape(vertex, edges)
+    
     return web.Response(body=json.dumps(answer), headers=headers)
 
 
 async def get_index(request):
     async with AIOFile("index.html", 'r') as afp:
         text = await afp.read()
+        
     return web.Response(text=text, content_type='text/html', )
+
 
 app = web.Application()
 app.router.add_get('/', get_index)
 app.router.add_get('/get_json', get_json)
 app.router.add_static('/lib', 'lib', name='lib')
-
 
 host = 'localhost'
 port = 9996
