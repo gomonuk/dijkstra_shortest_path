@@ -3,9 +3,9 @@
 <html>
 <head>
     <meta charset="utf-8"></meta>
-    <title>Tutorial 1: Getting Started</title>
-    <script src="cytoscape.js"></script>
-    <script src="cytoscape-node-html-label.js"></script>
+    <title>Dijkstra Shortest Path</title>
+    <script src="lib/cytoscape.js"></script>
+    <script src="lib/cytoscape-node-html-label.js"></script>
 
 </head>
 
@@ -17,58 +17,46 @@
         top: 0px;
         left: 0px;
     }
-
-
 </style>
 
 <body>
 <div id="cy"></div>
 <script>
-    function httpGet(theUrl)
-{
-    var xmlHttp = new XMLHttpRequest();
-    xmlHttp.open( "GET", theUrl, false ); // false for synchronous request
-    xmlHttp.send( null );
-    return xmlHttp.responseText;
-}
+    function httpGet(theUrl) {
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.open("GET", theUrl, false); // false for synchronous request
+        xmlHttp.send(null);
+        return xmlHttp.responseText;
+    }
 
-
-    var p = httpGet("http://localhost:9996/d");
+    var p = httpGet("http://localhost:9996/get_json");
     var myObj = JSON.parse(p);
-
-
-
-      var cy = cytoscape({
+    var cy = cytoscape({
         container: document.getElementById('cy'),
         elements: myObj,
-
-        layout: { name: 'breadthfirst',    avoidOverlap: true,
-    directed: true},
+        layout: { name: 'circle' },
         style: [
-        {
-        selector: 'edge',
-        style: {label: 'data(label)'}
-        },
-        {
-        selector: 'node',
-        style: {'label': 'data(id)', 'background-color': 'green'}
-        }]
+            {
+                selector: 'edge',
+                style: { 'label': 'data(label)'}
+            },
+            {
+                selector: 'node',
+                style: {'label': 'data(id)', 'background-color': 'green'}
+            }]
+    });
 
-      });
-
-
-      cy.nodeHtmlLabel([{
+    cy.nodeHtmlLabel([{
         query: '.l1',
         valign: "top",
         halign: "left",
         valignBox: "top",
         halignBox: "left",
-        tpl: function(data) {
-            return '<p class="cy-title__p1">' + data.path + '</p>';
+        tpl: function (data) {
+            return '<p class="cy-title__p3">' + 'Путь: ' + data.path + '</p>' + 'Вес вершины: ' + data.score;
         }
     }
-]);
-
+    ]);
 
 </script>
 </body>

@@ -1,19 +1,76 @@
 import json
 from aiohttp import web
+from aiofile import AIOFile
 
-app = web.Application()
+def find_path(vertex, edges):
+    for edge in edges:
+        for v in edge:
+            vertex[v]["neighbors"].update(set(edge))
+
+    min_vertex = "v1"
+    ber = list(vertex.keys())
+
+    for _ in vertex:
+        vertex_data = vertex[min_vertex]
+        vertex_data["neighbors"].remove(min_vertex)
+        for neighbor in vertex_data["neighbors"]:
+            p = edges.get((min_vertex, neighbor)) or edges.get((neighbor, min_vertex))  # не проверяется направленность
+            a = vertex[min_vertex]["score"] + p
+
+            if a < vertex[neighbor]["score"]:
+                vertex[neighbor]["path"] = vertex[min_vertex]["path"] + "->" + neighbor
+                vertex[neighbor]["score"] = vertex[min_vertex]["score"] + p
+
+        ber.remove(min_vertex)
+
+        mn = float("inf")
+        for v in ber:
+            if vertex[v]["score"] < mn:
+                min_vertex = v
+                mn = vertex[v]["score"]
+    return vertex
 
 
-def to_cytoscape():
-    vertex = {'v1': {'score': 0, 'path': 'v1', 'neighbors': {'v8', 'v4', 'v6'}},
-              'v2': {'score': 34, 'path': 'v1->v4->v6->v2', 'neighbors': {'v6', 'v4', 'v3'}},
-              'v3': {'score': 55, 'path': 'v1->v4->v6->v5->v3', 'neighbors': {'v5', 'v7', 'v2'}},
-              'v4': {'score': 24, 'path': 'v1->v4', 'neighbors': {'v5', 'v1', 'v6', 'v2'}},
-              'v5': {'score': 29, 'path': 'v1->v4->v6->v5', 'neighbors': {'v8', 'v7', 'v4', 'v6', 'v3'}},
-              'v6': {'score': 26, 'path': 'v1->v4->v6', 'neighbors': {'v5', 'v8', 'v1', 'v4', 'v2'}},
-              'v7': {'score': 44, 'path': 'v1->v4->v6->v5->v7', 'neighbors': {'v5', 'v3'}},
-              'v8': {'score': 27, 'path': 'v1->v8', 'neighbors': {'v5', 'v1', 'v6'}}}
+def to_cytoscape(vertex, edges):
+    answer = []
 
+    for k, v in vertex.items():
+        answer.append({"group": "nodes",
+                       "classes": "l1",
+                       "data": {"id": k,
+                                "score": v["score"],
+                                "path": v["path"],
+                                }
+                       })
+
+    for k, v in edges.items():
+        answer.append({
+            "data": {
+                "id": "_".join(k),
+                "source": k[0],
+                "target": k[1],
+                "label": v,
+                "width": v
+            }
+        }, )
+
+    return answer
+
+
+async def get_json(request):
+    infinity = float("inf")
+    headers = {'Access-Control-Allow-Origin': '*'}
+
+    vertex = {
+        "v1": {"score": 0, "path": "v1", "neighbors": set()},
+        "v2": {"score": infinity, "path": "", "neighbors": set()},
+        "v3": {"score": infinity, "path": "", "neighbors": set()},
+        "v4": {"score": infinity, "path": "", "neighbors": set()},
+        "v5": {"score": infinity, "path": "", "neighbors": set()},
+        "v6": {"score": infinity, "path": "", "neighbors": set()},
+        "v7": {"score": infinity, "path": "", "neighbors": set()},
+        "v8": {"score": infinity, "path": "", "neighbors": set()}
+    }
     edges = {
         ("v1", "v4"): 24,
         ("v2", "v6"): 8,
@@ -33,72 +90,23 @@ def to_cytoscape():
 
         ("v2", "v4"): 12,
         ("v4", "v6"): 2
-
     }
 
-    answer = []
-
-    for k, v in vertex.items():
-        # {data: {id: 'a', name: 'Albert'}},
-        answer.append({"group": "nodes",
-                       "classes": "l1",
-                       "data": {"id": k,
-                                "score": v["score"],
-                                "path": v["path"],
-                                }
-                       })
+    vertex = find_path(vertex, edges)
+    answer = to_cytoscape(vertex, edges)
+    return web.Response(body=json.dumps(answer), headers=headers)
 
 
-    for k, v in edges.items():
-        answer.append({
-            "data": {
-                "id": "_".join(k),
-                "source": k[0],
-                "target": k[1],
-                "label": v,
-                "width": v
-            }
-        }, )
+async def get_index(request):
+    async with AIOFile("index.html", 'r') as afp:
+        text = await afp.read()
+    return web.Response(text=text, content_type='text/html', )
 
-    return answer
+app = web.Application()
+app.router.add_get('/', get_index)
+app.router.add_get('/get_json', get_json)
+app.router.add_static('/lib', 'lib', name='lib')
 
-
-async def get(request):
-    print("GET")
-    # answer = [
-    #     {"data": {"id": 'a'}},
-    #     {"data": {"id": 'b'}},
-    #
-    #     {"data": {"id": 'c'}},
-    #     {"data": {"id": 'd'}},
-    #
-    #     {"data": {
-    #         "id": 'ab',
-    #         "source": 'a',
-    #         "target": 'b'
-    #     }},
-    #
-    #     {"data": {
-    #         "id": 'ab1',
-    #         "source": 'a',
-    #         "target": 'c'
-    #     }},
-    #
-    #     {"data": {
-    #         "id": 'ab2',
-    #         "source": 'a',
-    #         "target": 'd'
-    #     }}
-    #
-    # ]
-    answer = to_cytoscape()
-
-    h = {'Access-Control-Allow-Origin': '*'}
-
-    return web.Response(body=json.dumps(answer), headers=h)
-
-
-app.router.add_get('/d', get)
 
 host = 'localhost'
 port = 9996
